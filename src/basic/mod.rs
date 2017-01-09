@@ -46,7 +46,7 @@ impl<'a> Interpreter<'a> {
         Interpreter { source: source }
     }
     pub fn expr(&self) -> Result<u32, Error> {
-        let mut l = lexer::Lexer::new(self.source.chars());
+        let mut l = lexer::Lexer::new(self.source);
         let mut operand_stack = Vec::new();
         let mut operator_stack = Vec::new();
         loop {
@@ -97,7 +97,7 @@ fn test_interpreter_works() {
 #[test]
 fn test_interpreter_two_digit() {
     let ip = Interpreter::new("32");
-    assert_eq!(ip.expr(), Err(Error::Semantic));
+    assert_eq!(ip.expr(), Ok(32));
 }
 
 #[test]
