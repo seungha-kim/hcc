@@ -6,6 +6,7 @@ use std::fmt;
 pub enum Token {
     Integer(u32),
     Plus,
+    Minus,
     Eof,
 }
 
@@ -50,6 +51,7 @@ impl<'a> Lexer<'a> {
             return match taken {
                 Some(c) if c.is_digit(10) => Ok(Token::Integer(c.to_digit(10).unwrap())),
                 Some(c) if c == '+' => Ok(Token::Plus),
+                Some(c) if c == '-' => Ok(Token::Minus),
                 Some(c) if c.is_whitespace() => continue,
                 None => Ok(Token::Eof),
                 _ => Err(Error::Syntax),
@@ -60,10 +62,11 @@ impl<'a> Lexer<'a> {
 
 #[test]
 fn test_lexer() {
-    let source = "3+2";
+    let source = "3+2-";
     let mut lexer = Lexer {source_chars: source.chars()};
     assert_eq!(lexer.next_token(), Ok(Token::Integer(3)));
     assert_eq!(lexer.next_token(), Ok(Token::Plus));
     assert_eq!(lexer.next_token(), Ok(Token::Integer(2)));
+    assert_eq!(lexer.next_token(), Ok(Token::Minus));
     assert_eq!(lexer.next_token(), Ok(Token::Eof));
 }

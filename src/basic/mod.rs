@@ -8,6 +8,7 @@ pub struct Interpreter<'a> {
 
 enum Operator {
     Plus,
+    Minus,
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,6 +54,7 @@ impl<'a> Interpreter<'a> {
             match token {
                 Token::Integer(i) => operand_stack.push(i),
                 Token::Plus => operator_stack.push(Operator::Plus),
+                Token::Minus => operator_stack.push(Operator::Minus),
                 Token::Eof => break,
             }
         }
@@ -63,6 +65,11 @@ impl<'a> Interpreter<'a> {
                     let right = try!(operand_stack.pop().ok_or(Error::Semantic));
                     let left = try!(operand_stack.pop().ok_or(Error::Semantic));
                     operand_stack.push(left + right);
+                },
+                Some(Operator::Minus) => {
+                    let right = try!(operand_stack.pop().ok_or(Error::Semantic));
+                    let left = try!(operand_stack.pop().ok_or(Error::Semantic));
+                    operand_stack.push(left - right);
                 },
                 None => break,
             }
@@ -79,6 +86,12 @@ impl<'a> Interpreter<'a> {
 fn test_interpreter_works() {
     let ip = Interpreter::new("3+2");
     assert_eq!(ip.expr().unwrap(), 5);
+
+    let ip = Interpreter::new("3-2");
+    assert_eq!(ip.expr().unwrap(), 1);
+
+    // let ip = Interpreter::new("3-4");
+    // assert_eq!(ip.expr().unwrap(), -1);
 }
 
 #[test]
