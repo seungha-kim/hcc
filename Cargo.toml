@@ -1,0 +1,6 @@
+[package]
+name = "hcc"
+version = "0.1.0"
+authors = ["Seungha Kim <dbeat999@gmail.com>"]
+
+[dependencies]
