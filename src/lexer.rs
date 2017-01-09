@@ -6,7 +6,7 @@ use std::num;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Token {
-    Integer(u32),
+    Integer(i32),
     Plus,
     Minus,
     Eof,

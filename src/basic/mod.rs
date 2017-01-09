@@ -45,7 +45,7 @@ impl<'a> Interpreter<'a> {
     pub fn new(source: &'a str) -> Self {
         Interpreter { source: source }
     }
-    pub fn expr(&self) -> Result<u32, Error> {
+    pub fn expr(&self) -> Result<i32, Error> {
         let mut l = lexer::Lexer::new(self.source);
         let mut operand_stack = Vec::new();
         let mut operator_stack = Vec::new();
