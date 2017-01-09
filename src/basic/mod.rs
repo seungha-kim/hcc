@@ -1,7 +1,6 @@
 use std::error;
 use std::fmt;
-use lexer;
-use lexer::Token;
+use lexer::{self, Token};
 
 pub struct Interpreter<'a> {
     source: &'a str,

@@ -45,12 +45,15 @@ impl<'a> Lexer<'a> {
         Lexer { source_chars: chars }
     }
     pub fn next_token(&mut self) -> Result<Token, Error> {
-        let taken = self.source_chars.next();
-        match taken {
-            Some(c) if c.is_digit(10) => Ok(Token::Integer(c.to_digit(10).unwrap())),
-            Some(c) if c == '+' => Ok(Token::Plus),
-            None => Ok(Token::Eof),
-            _ => Err(Error::Syntax),
+        loop {
+            let taken = self.source_chars.next();
+            return match taken {
+                Some(c) if c.is_digit(10) => Ok(Token::Integer(c.to_digit(10).unwrap())),
+                Some(c) if c == '+' => Ok(Token::Plus),
+                Some(c) if c.is_whitespace() => continue,
+                None => Ok(Token::Eof),
+                _ => Err(Error::Syntax),
+            };
         }
     }
 }
