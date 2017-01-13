@@ -15,6 +15,7 @@ pub enum Token {
     Plus,
     Minus,
     Eof,
+    Ws,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -38,14 +39,14 @@ impl error::Error for Error {
     }
     fn cause(&self) -> Option<&error::Error> {
         match *self {
-            Error::Syntax => None
+            Error::Syntax => None,
         }
     }
 }
 
-pub struct Lexer<'a>
-{
-    chars: Peekable<Chars<'a>>,
+pub struct Lexer {
+    chars: Vec<char>,
+    pos: usize,
 }
 
 impl From<num::ParseIntError> for Error {
@@ -54,42 +55,62 @@ impl From<num::ParseIntError> for Error {
     }
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str) -> Lexer<'a> {
-        Lexer { chars: source.chars().peekable() }
+macro_rules! extract_in_sequence {
+    ( $s:ident , $( $i:path ) , + ) => {{
+        $(
+            #[cfg(debug_assertions)] println!("{} : try {}", $s.pos, stringify!($i));
+            match $i(&mut $s.chars, $s.pos) {
+                Ok((t, pos)) => {
+                    $s.pos = pos;
+                    return Ok(t)
+                }
+                Err(ExtractorError::NoMoreChars) => return Ok(Token::Eof),
+                Err(ExtractorError::NotMatched) => (),
+                e => panic!("{:?}", e),
+            }
+        )*
+        return Err(Error::Syntax)
+    }};
+    ( $s:ident , $( $i:path , ) + ) => (extract_in_sequence!($s, $($i),+));
+}
+
+impl Lexer {
+    pub fn new(source: &str) -> Lexer {
+        Lexer {
+            chars: source.chars().collect(),
+            pos: 0,
+        }
     }
     pub fn next_token(&mut self) -> Result<Token, Error> {
         loop {
-            return match self.chars.next() {
-                Some(c) if c.is_digit(10) => {
-                    let mut digits = vec![c];
-                    while let Some(&d) = self.chars.peek() {
-                        if d.is_digit(10) {
-                            digits.push(d);
-                            self.chars.next();
-                        } else {
-                            break
-                        }
-                    }
-                    let i = try!(digits.iter().cloned().collect::<String>().parse());
-                    Ok(Token::Integer(i))
-                },
-                Some(c) if c == '+' => Ok(Token::Plus),
-                Some(c) if c == '-' => Ok(Token::Minus),
-                Some(c) if c.is_whitespace() => continue,
-                None => Ok(Token::Eof),
-                _ => Err(Error::Syntax),
-            };
+            match self.extract() {
+                Ok(Token::Ws) => (),
+                r => return r,
+            }
         }
+    }
+    fn extract(&mut self) -> Result<Token, Error> {
+        extract_in_sequence!(self,
+            Extractor::ident,
+            Extractor::integer,
+            Extractor::plus,
+            Extractor::minus,
+            Extractor::open_paren,
+            Extractor::close_paren,
+            Extractor::ws,
+        )
     }
 }
 
 #[test]
 fn test_lexer() {
-    let source = "33+2-";
+    let source = "(33) + (2 -";
     let mut lexer = Lexer::new(source);
+    assert_eq!(lexer.next_token(), Ok(Token::OpenParen));
     assert_eq!(lexer.next_token(), Ok(Token::Integer(33)));
+    assert_eq!(lexer.next_token(), Ok(Token::CloseParen));
     assert_eq!(lexer.next_token(), Ok(Token::Plus));
+    assert_eq!(lexer.next_token(), Ok(Token::OpenParen));
     assert_eq!(lexer.next_token(), Ok(Token::Integer(2)));
     assert_eq!(lexer.next_token(), Ok(Token::Minus));
     assert_eq!(lexer.next_token(), Ok(Token::Eof));
@@ -157,7 +178,7 @@ impl Extractor {
     fn minus(chars: &Vec<char>, pos: Pos) -> Result<(Token, Pos), ExtractorError> {
         match chars.get(pos) {
             None => Err(ExtractorError::NoMoreChars),
-            Some(&c) if c == '-' => Ok((Token::Plus, pos + 1)),
+            Some(&c) if c == '-' => Ok((Token::Minus, pos + 1)),
             _ => Err(ExtractorError::NotMatched),
         }
     }
@@ -175,6 +196,23 @@ impl Extractor {
             _ => Err(ExtractorError::NotMatched),
         }
     }
+    fn ws(chars: &Vec<char>, pos: Pos) -> Result<(Token, Pos), ExtractorError> {
+        let c = *try!(chars.get(pos).ok_or(ExtractorError::NoMoreChars));
+        if c.is_whitespace() {
+            let mut step = pos;
+            loop {
+                match chars.get(step) {
+                    Some(&c) if c.is_whitespace() => {
+                        step += 1;
+                    }
+                    _ => break,
+                }
+            }
+            Ok((Token::Ws, step))
+        } else {
+            Err(ExtractorError::NotMatched)
+        }
+    }
 }
 
 #[test]
@@ -184,19 +222,24 @@ fn test_extractor_integer() {
     let chars = "123".chars().collect();
     assert_eq!(Ok((Token::Integer(123), 3)), Extractor::integer(&chars, 0));
     let chars = "a".chars().collect();
-    assert_eq!(Err(ExtractorError::NotMatched), Extractor::integer(&chars, 0));
+    assert_eq!(Err(ExtractorError::NotMatched),
+               Extractor::integer(&chars, 0));
     let chars = "".chars().collect();
-    assert_eq!(Err(ExtractorError::NoMoreChars), Extractor::integer(&chars, 0));
+    assert_eq!(Err(ExtractorError::NoMoreChars),
+               Extractor::integer(&chars, 0));
 }
 
 #[test]
 fn test_extractor_ident() {
     let chars = "a".chars().collect();
-    assert_eq!(Ok((Token::Ident("a".into()), 1)), Extractor::ident(&chars, 0));
+    assert_eq!(Ok((Token::Ident("a".into()), 1)),
+               Extractor::ident(&chars, 0));
     let chars = "abc".chars().collect();
-    assert_eq!(Ok((Token::Ident("abc".into()), 3)), Extractor::ident(&chars, 0));
+    assert_eq!(Ok((Token::Ident("abc".into()), 3)),
+               Extractor::ident(&chars, 0));
     let chars = "한글123후후aa".chars().collect();
-    assert_eq!(Ok((Token::Ident("한글123후후aa".into()), 9)), Extractor::ident(&chars, 0));
+    assert_eq!(Ok((Token::Ident("한글123후후aa".into()), 9)),
+               Extractor::ident(&chars, 0));
     let chars = "1".chars().collect();
     assert_eq!(Err(ExtractorError::NotMatched), Extractor::ident(&chars, 0));
     let chars = "1한글후후".chars().collect();
@@ -216,9 +259,10 @@ fn test_extractor_plus() {
 #[test]
 fn test_extractor_mius() {
     let chars = "".chars().collect();
-    assert_eq!(Err(ExtractorError::NoMoreChars), Extractor::minus(&chars, 0));
+    assert_eq!(Err(ExtractorError::NoMoreChars),
+               Extractor::minus(&chars, 0));
     let chars = "-".chars().collect();
-    assert_eq!(Ok((Token::Plus, 1)), Extractor::minus(&chars, 0));
+    assert_eq!(Ok((Token::Minus, 1)), Extractor::minus(&chars, 0));
     let chars = "1".chars().collect();
     assert_eq!(Err(ExtractorError::NotMatched), Extractor::minus(&chars, 0));
 }
@@ -226,19 +270,24 @@ fn test_extractor_mius() {
 #[test]
 fn test_extractor_open_paren() {
     let chars = "".chars().collect();
-    assert_eq!(Err(ExtractorError::NoMoreChars), Extractor::open_paren(&chars, 0));
+    assert_eq!(Err(ExtractorError::NoMoreChars),
+               Extractor::open_paren(&chars, 0));
     let chars = "(".chars().collect();
     assert_eq!(Ok((Token::OpenParen, 1)), Extractor::open_paren(&chars, 0));
     let chars = "1".chars().collect();
-    assert_eq!(Err(ExtractorError::NotMatched), Extractor::open_paren(&chars, 0));
+    assert_eq!(Err(ExtractorError::NotMatched),
+               Extractor::open_paren(&chars, 0));
 }
 
 #[test]
 fn test_extractor_close_paren() {
     let chars = "".chars().collect();
-    assert_eq!(Err(ExtractorError::NoMoreChars), Extractor::close_paren(&chars, 0));
+    assert_eq!(Err(ExtractorError::NoMoreChars),
+               Extractor::close_paren(&chars, 0));
     let chars = ")".chars().collect();
-    assert_eq!(Ok((Token::CloseParen, 1)), Extractor::close_paren(&chars, 0));
+    assert_eq!(Ok((Token::CloseParen, 1)),
+               Extractor::close_paren(&chars, 0));
     let chars = "1".chars().collect();
-    assert_eq!(Err(ExtractorError::NotMatched), Extractor::close_paren(&chars, 0));
+    assert_eq!(Err(ExtractorError::NotMatched),
+               Extractor::close_paren(&chars, 0));
 }
