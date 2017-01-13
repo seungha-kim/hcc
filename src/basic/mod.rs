@@ -56,6 +56,9 @@ impl<'a> Interpreter<'a> {
                 Token::Plus => operator_stack.push(Operator::Plus),
                 Token::Minus => operator_stack.push(Operator::Minus),
                 Token::Eof => break,
+                Token::Ident(_) => panic!("not allowed"),
+                Token::OpenParen => panic!("not allowed"),
+                Token::CloseParen => panic!("not allowed"),
             }
         }
         loop {
@@ -104,4 +107,9 @@ fn test_interpreter_two_digit() {
 fn test_interpreter_two_plus() {
     let ip = Interpreter::new("3++");
     assert_eq!(ip.expr(), Err(Error::Semantic));
+}
+
+#[test]
+fn test_string_index() {
+    assert_eq!("asdf".chars().nth(2), Some('d'));
 }
